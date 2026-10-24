@@ -1,0 +1,50 @@
+[
+  {
+    "timestamp": "2026-10-24T16:57:46.822Z",
+    "model": "gemini-3.5-flash-lite",
+    "categoryAccuracy": 100,
+    "priorityAccuracy": 70,
+    "categoryMismatches": 0,
+    "priorityMismatches": 3,
+    "latency": 62885,
+    "cost": 0,
+    "sampleSize": 10,
+    "dataset": "100"
+  },
+  {
+    "timestamp": "2026-10-24T16:58:10.029Z",
+    "model": "gemini-3.5-flash-lite",
+    "categoryAccuracy": null,
+    "priorityAccuracy": null,
+    "categoryMismatches": 0,
+    "priorityMismatches": 0,
+    "latency": 14211,
+    "cost": 0,
+    "sampleSize": 10,
+    "dataset": "500"
+  },
+  {
+    "timestamp": "2026-10-24T17:00:33.762Z",
+    "model": "gemini-3.5-flash-lite",
+    "categoryAccuracy": 86.67,
+    "priorityAccuracy": 73.33,
+    "categoryMismatches": 2,
+    "priorityMismatches": 4,
+    "latency": 33406,
+    "cost": 0,
+    "sampleSize": 15,
+    "dataset": "100"
+  },
+  {
+    "timestamp": "2026-10-24T17:02:38.487Z",
+    "model": "gemini-3.5-flash-lite",
+    "categoryAccuracy": 80,
+    "priorityAccuracy": 80,
+    "categoryMismatches": 3,
+    "priorityMismatches": 3,
+    "latency": 47064,
+    "cost": 0,
+    "sampleSize": 15,
+    "dataset": "100"
+  }
+]

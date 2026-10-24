@@ -38,13 +38,10 @@ export default function TriagePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ticket,
-        }),
+        body: JSON.stringify({ ticket }),
       });
 
       const data: unknown = await response.json();
-      console.log(data);
 
       if (!response.ok) {
         const detail =
@@ -65,19 +62,16 @@ export default function TriagePage() {
         !("version" in data) ||
         !("usage" in data)
       ) {
-        throw new Error(
-          "The server returned an invalid triage result."
-        );
+        throw new Error("The server returned an invalid triage result.");
       }
 
       setResult(data.triage as TriageResult);
       setVersion(data.version as string);
       setUsage(data.usage as Usage);
-
-    } catch (error) {
+    } catch (caughtError) {
       setError(
-        error instanceof Error
-          ? error.message
+        caughtError instanceof Error
+          ? caughtError.message
           : "Unable to classify this ticket."
       );
     } finally {
@@ -86,90 +80,189 @@ export default function TriagePage() {
   }
 
   return (
-    <main>
-      <h1>Triage V2</h1>
+    <main className="triage-page">
+      <div className="triage-shell">
+        <a className="triage-back-link" href="/">
+          <span aria-hidden="true">←</span> Support chat
+        </a>
 
-      <label htmlFor="ticket">
-        Support Ticket
-      </label>
-
-      <textarea
-        id="ticket"
-        value={ticket}
-        onChange={(e) =>
-          setTicket(e.target.value)
-        }
-        rows={10}
-        disabled={isSubmitting}
-      />
-
-      <button
-        onClick={submitTicket}
-        disabled={
-          isSubmitting || !ticket.trim()
-        }
-      >
-        {isSubmitting
-          ? "Classifying..."
-          : "Classify Ticket"}
-      </button>
-
-      {error && (
-        <p role="alert">
-          {error}
-        </p>
-      )}
-
-      {result && (
-        <section aria-live="polite">
-          <h2>Triage Result</h2>
-
+        <header className="triage-header">
+          <div className="triage-eyebrow">
+            <span className="triage-eyebrow-mark" aria-hidden="true">
+              ✦
+            </span>
+            AI-ASSISTED SUPPORT
+          </div>
+          <h1>Ticket triage</h1>
           <p>
-            Prompt Version: {version}
+            Turn a support request into clear, actionable next steps for your
+            team.
           </p>
+        </header>
 
-          <p>
-            <strong>Category:</strong>{" "}
-            {result.category}
-          </p>
+        <section className="triage-card" aria-labelledby="ticket-heading">
+          <div className="triage-card-heading">
+            <div>
+              <span className="triage-step">01</span>
+              <div>
+                <h2 id="ticket-heading">Describe the issue</h2>
+                <p>Include the details that will help us route it correctly.</p>
+              </div>
+            </div>
+            <span className="triage-version-badge">TRIAGE V2</span>
+          </div>
 
-          <p>
-            <strong>Priority:</strong>{" "}
-            {result.priority}
-          </p>
+          <label className="triage-label" htmlFor="ticket">
+            Support ticket
+          </label>
+          <textarea
+            className="triage-textarea"
+            id="ticket"
+            value={ticket}
+            onChange={(event) => setTicket(event.target.value)}
+            placeholder="For example: I can't access my account after resetting my password. I need help before my meeting this afternoon."
+            rows={7}
+            disabled={isSubmitting}
+          />
+          <div className="triage-input-footer">
+            <span>Your ticket is analyzed to suggest a category and priority.</span>
+            <span>{ticket.length} characters</span>
+          </div>
 
-          <p>
-            <strong>Summary:</strong>{" "}
-            {result.summary}
-          </p>
-
-          <p>
-            <strong>Suggested Action:</strong>{" "}
-            {result.suggestedAction}
-          </p>
+          <div className="triage-form-footer">
+            <p>Results are suggestions. Your team makes the final call.</p>
+            <button
+              className="triage-submit"
+              type="button"
+              onClick={submitTicket}
+              disabled={isSubmitting || !ticket.trim()}
+              aria-busy={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="triage-button-spinner" aria-hidden="true" />
+                  Analyzing ticket…
+                </>
+              ) : (
+                <>
+                  Classify ticket <span aria-hidden="true">→</span>
+                </>
+              )}
+            </button>
+          </div>
         </section>
-      )}
 
-      {usage && (
-        <section aria-label="Token usage">
-          <h3>Token Usage</h3>
+        {isSubmitting && (
+          <section
+            className="triage-loading-card"
+            role="status"
+            aria-live="polite"
+            aria-label="Ticket classification in progress"
+          >
+            <div className="triage-loading-visual" aria-hidden="true">
+              <span className="triage-loading-orbit triage-orbit-one" />
+              <span className="triage-loading-orbit triage-orbit-two" />
+              <span className="triage-loading-center">✦</span>
+            </div>
+            <div className="triage-loading-copy">
+              <span className="triage-loading-kicker">WORKING ON IT</span>
+              <h2>Finding the right route</h2>
+              <p>
+                Reviewing the ticket and preparing a suggested category,
+                priority, and action.
+              </p>
+              <div className="triage-progress-track" aria-hidden="true">
+                <span />
+              </div>
+              <span className="triage-loading-note">
+                This can take a little longer when the AI service is busy.
+              </span>
+            </div>
+            <div className="triage-skeleton" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+        )}
 
-          <p>
-            <strong>Input Tokens:</strong>{" "}
-            {usage.promptTokenCount}
-          </p>
+        {error && (
+          <section className="triage-error" role="alert">
+            <span className="triage-error-mark" aria-hidden="true">
+              !
+            </span>
+            <div>
+              <h2>We couldn’t classify this ticket</h2>
+              <p>{error}</p>
+              <span>You can try again in a moment.</span>
+            </div>
+          </section>
+        )}
 
-          <p>
-            <strong>Output Tokens:</strong>{" "}
-            {usage.candidatesTokenCount}
-          </p>
+        {result && (
+          <section className="triage-result-card" aria-live="polite">
+            <div className="triage-result-heading">
+              <div>
+                <span className="triage-step">02</span>
+                <div>
+                  <h2>Triage result</h2>
+                  <p>Suggested handling for this support request.</p>
+                </div>
+              </div>
+              <span className="triage-result-version">{version}</span>
+            </div>
 
-          <p>
-            <strong>Total Tokens:</strong>{" "}
-            {usage.totalTokenCount}
-          </p>
-        </section>
-      )}
+            <div className="triage-result-grid">
+              <div className="triage-result-item">
+                <span>Category</span>
+                <strong>{result.category.replaceAll("_", " ")}</strong>
+              </div>
+              <div className="triage-result-item">
+                <span>Priority</span>
+                <strong className={`triage-priority triage-priority-${result.priority}`}>
+                  {result.priority}
+                </strong>
+              </div>
+              <div className="triage-result-item triage-result-wide">
+                <span>Summary</span>
+                <p>{result.summary}</p>
+              </div>
+              <div className="triage-result-item triage-result-wide">
+                <span>Suggested action</span>
+                <p>{result.suggestedAction}</p>
+              </div>
+            </div>
+
+            {usage && (
+              <div className="triage-usage" aria-label="Model token usage">
+                <div className="triage-usage-heading">
+                  <span className="triage-usage-icon" aria-hidden="true">
+                    #
+                  </span>
+                  <div>
+                    <h3>Model usage</h3>
+                    <p>Tokens used for this classification</p>
+                  </div>
+                </div>
+                <dl className="triage-usage-metrics">
+                  <div>
+                    <dt>Input Tokens</dt>
+                    <dd>{usage.promptTokenCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Output Tokens</dt>
+                    <dd>{usage.candidatesTokenCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Total Tokens</dt>
+                    <dd>{usage.totalTokenCount}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
     </main>
   );
 }
