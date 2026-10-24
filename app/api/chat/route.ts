@@ -6,25 +6,38 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+    return Response.json(
+      { error: "Invalid JSON body." },
+      { status: 400 }
+    );
   }
 
   if (
     typeof body !== "object" ||
     body === null ||
-    !("message" in body) ||
-    typeof body.message !== "string" ||
-    !body.message.trim()
+    !("messages" in body) ||
+    !Array.isArray(body.messages)
   ) {
     return Response.json(
-      { error: "Please provide a non-empty message string." },
-      { status: 400 },
+      { error: "Please provide a messages array." },
+      { status: 400 }
     );
   }
 
+  const contents = body.messages.map(
+    (message: { role: string; text: string }) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [
+        {
+          text: message.text,
+        },
+      ],
+    }),
+  );
+
   const response = await llm.models.generateContent({
     model: process.env.LLM_MODEL!,
-    contents: body.message,
+    contents,
   });
 
   return Response.json({

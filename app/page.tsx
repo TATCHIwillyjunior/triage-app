@@ -22,19 +22,31 @@ export default function ChatPage() {
     setError(null);
 
     try {
+      const conversation = [
+        ...messages,
+        {
+          role: "user",
+          text: message,
+        },
+      ];
+
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: conversation,
+        }),
       });
       const data: unknown = await response.json();
 
       if (!response.ok) {
         const detail =
           typeof data === "object" &&
-          data !== null &&
-          "error" in data &&
-          typeof data.error === "string"
+            data !== null &&
+            "error" in data &&
+            typeof data.error === "string"
             ? data.error
             : "Unable to send your message. Please try again.";
         throw new Error(detail);

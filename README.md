@@ -12,10 +12,12 @@ full triage workflow.
 
 ## Current status
 
-The chat client sends messages to `/api/chat`. The server validates the
-request, sends the message to Google GenAI, and returns the generated response.
-Configure `LLM_API_KEY` and `LLM_MODEL` in your local environment before using
-the chat. The example variable names are listed in `.env.example`.
+The chat client keeps the current conversation in the page and sends its
+message history to `/api/chat`. The server maps assistant messages to the
+Google GenAI `model` role, sends the conversation to Google GenAI, and returns
+the generated response. Configure `LLM_API_KEY` and `LLM_MODEL` in your local
+environment before using the chat. The example variable names are listed in
+`.env.example`.
 
 The chat integration is an intermediate step toward the complete support
 ticket triage feature. The triage route is still a placeholder.
@@ -25,19 +27,23 @@ ticket triage feature. The triage route is still a placeholder.
 ### Completed
 
 - [x] Created the chat interface and connected it to the `/api/chat` endpoint.
-- [x] Added request validation for malformed JSON and empty or non-string
-  messages.
+- [x] Added JSON parsing error handling and validation that chat requests
+  contain a `messages` array.
 - [x] Added a Google GenAI client configured with `LLM_API_KEY`.
-- [x] Updated the chat endpoint to generate a response using `LLM_MODEL`
-  instead of echoing the submitted message.
+- [x] Updated the chat endpoint to send conversation history to Google GenAI
+  using `LLM_MODEL` and return the generated response.
+- [x] Updated the chat interface to retain user/assistant messages across
+  turns and show request errors.
 - [x] Added labelled and unlabelled sample ticket datasets for development
   and evaluation.
 
 ### To do
 
+- [ ] Validate each conversation entry on the server, including its role and
+  text, before sending it to the LLM.
+- [ ] Handle LLM provider failures with a clear API error response.
 - [ ] Implement the support-ticket triage workflow in the triage route.
 - [ ] Use the ticket datasets to test and evaluate triage results.
-- [ ] Decide how to handle and present LLM provider errors in the chat UI.
 
 ## Sample data
 
@@ -70,10 +76,23 @@ Open http://localhost:3033 and send a message. Both `npm run dev` and
 The Send button is disabled when the message is empty or contains only spaces,
 and while a request is in progress.
 
-The client posts `{ "message": "your text" }` to `/api/chat`. The App Router
-handler in `app/api/chat/route.ts` returns `{ "answer": "..." }` with the
-generated response. Invalid JSON or an empty/non-string message returns HTTP
-400 with an `error`.
+The client posts the conversation as an array of objects with a `role` (`user`
+or `assistant`) and `text` field:
+
+```json
+{
+  "messages": [
+    { "role": "user", "text": "I need help with my account." },
+    { "role": "assistant", "text": "I can help with that." },
+    { "role": "user", "text": "I cannot reset my password." }
+  ]
+}
+```
+
+The App Router handler in `app/api/chat/route.ts` returns
+`{ "answer": "..." }` with the generated response. Invalid JSON and requests
+without a `messages` array return HTTP 400 with an `error`. Individual message
+entries are not yet validated by the server.
 
 ## Checks
 
