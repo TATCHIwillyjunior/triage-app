@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 
+type TriageResult = {
+  category: string;
+  priority: string;
+  summary: string;
+  suggestedAction: string;
+};
+
 export default function TriagePage() {
   const [ticket, setTicket] = useState("");
-  const [result, setResult] = useState("");
+  const [result, setResult] =
+    useState<TriageResult | null>(null);
   const [version, setVersion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,7 +22,7 @@ export default function TriagePage() {
 
     setIsSubmitting(true);
     setError(null);
-    setResult("");
+    setResult(null);
     setVersion("");
 
     try {
@@ -23,9 +31,13 @@ export default function TriagePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ticket }),
+        body: JSON.stringify({
+          ticket,
+        }),
       });
+
       const data: unknown = await response.json();
+      console.log(data);
 
       if (!response.ok) {
         const detail =
@@ -34,28 +46,30 @@ export default function TriagePage() {
           "error" in data &&
           typeof data.error === "string"
             ? data.error
-            : "Unable to classify this ticket. Please try again.";
+            : "Unable to classify this ticket.";
+
         throw new Error(detail);
       }
 
       if (
         typeof data !== "object" ||
         data === null ||
-        !("result" in data) ||
-        typeof data.result !== "string" ||
-        !("version" in data) ||
-        typeof data.version !== "string"
+        !("triage" in data) ||
+        !("version" in data)
       ) {
-        throw new Error("The server returned an invalid triage result.");
+        throw new Error(
+          "The server returned an invalid triage result."
+        );
       }
 
-      setResult(data.result);
-      setVersion(data.version);
+      setResult(data.triage as TriageResult);
+      setVersion(data.version as string);
+
     } catch (error) {
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to classify this ticket. Please try again.",
+          : "Unable to classify this ticket."
       );
     } finally {
       setIsSubmitting(false);
@@ -64,30 +78,66 @@ export default function TriagePage() {
 
   return (
     <main>
-      <h1>Triage V1</h1>
+      <h1>Triage V2</h1>
 
-      <label htmlFor="ticket">Support ticket</label>
+      <label htmlFor="ticket">
+        Support Ticket
+      </label>
+
       <textarea
         id="ticket"
         value={ticket}
-        onChange={(e) => setTicket(e.target.value)}
+        onChange={(e) =>
+          setTicket(e.target.value)
+        }
         rows={10}
         disabled={isSubmitting}
       />
 
       <button
         onClick={submitTicket}
-        disabled={isSubmitting || !ticket.trim()}
+        disabled={
+          isSubmitting || !ticket.trim()
+        }
       >
-        {isSubmitting ? "Classifying..." : "Classify Ticket"}
+        {isSubmitting
+          ? "Classifying..."
+          : "Classify Ticket"}
       </button>
 
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {error}
+        </p>
+      )}
+
       {result && (
         <section aria-live="polite">
-          <h2>Triage result</h2>
-          <p>Prompt version: {version}</p>
-          <pre>{result}</pre>
+          <h2>Triage Result</h2>
+
+          <p>
+            Prompt Version: {version}
+          </p>
+
+          <p>
+            <strong>Category:</strong>{" "}
+            {result.category}
+          </p>
+
+          <p>
+            <strong>Priority:</strong>{" "}
+            {result.priority}
+          </p>
+
+          <p>
+            <strong>Summary:</strong>{" "}
+            {result.summary}
+          </p>
+
+          <p>
+            <strong>Suggested Action:</strong>{" "}
+            {result.suggestedAction}
+          </p>
         </section>
       )}
     </main>
