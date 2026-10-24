@@ -1,99 +1,108 @@
 import fs from "fs/promises";
 import path from "path";
+import AdminDashboard, { type SmokeTestRun } from "./dashboard";
 
-type SmokeTestRun = {
-  timestamp: string;
-  model: string;
-  categoryAccuracy: number | null;
-  priorityAccuracy: number | null;
-  categoryMismatches: number;
-  priorityMismatches: number;
-  latency: number;
-  cost: number;
-  sampleSize: number;
-  dataset: string;
-};
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
 
-export default async function AdminPage() {
+function isSmokeTestRun(value: unknown): value is SmokeTestRun {
+  if (typeof value !== "object" || value === null) return false;
+
+  return (
+    "timestamp" in value &&
+    typeof value.timestamp === "string" &&
+    "model" in value &&
+    typeof value.model === "string" &&
+    "categoryAccuracy" in value &&
+    isNullableNumber(value.categoryAccuracy) &&
+    "priorityAccuracy" in value &&
+    isNullableNumber(value.priorityAccuracy) &&
+    "categoryMismatches" in value &&
+    typeof value.categoryMismatches === "number" &&
+    "priorityMismatches" in value &&
+    typeof value.priorityMismatches === "number" &&
+    "latency" in value &&
+    typeof value.latency === "number" &&
+    "cost" in value &&
+    typeof value.cost === "number" &&
+    "sampleSize" in value &&
+    typeof value.sampleSize === "number" &&
+    "dataset" in value &&
+    typeof value.dataset === "string" &&
+    (!("strategy" in value) ||
+      typeof value.strategy === "string" ||
+      value.strategy === null) &&
+    (!("decisionModelCategoryAccuracy" in value) ||
+      isNullableNumber(value.decisionModelCategoryAccuracy)) &&
+    (!("decisionModelPriorityAccuracy" in value) ||
+      isNullableNumber(value.decisionModelPriorityAccuracy)) &&
+    (!("decisionModelCategoryMismatches" in value) ||
+      isNullableNumber(value.decisionModelCategoryMismatches)) &&
+    (!("decisionModelPriorityMismatches" in value) ||
+      isNullableNumber(value.decisionModelPriorityMismatches))
+  );
+}
+
+async function loadSmokeTestRuns(): Promise<SmokeTestRun[]> {
   const logFile = path.join(
     process.cwd(),
     "data",
     "smoke-test-runs.json"
   );
 
-  let runs: SmokeTestRun[] = [];
-
+  let content: string;
   try {
-    const file = await fs.readFile(
-      logFile,
-      "utf8"
-    );
-
-    runs = JSON.parse(file);
-  } catch {
-    runs = [];
+    content = await fs.readFile(logFile, "utf8");
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return [];
+    }
+    throw error;
   }
 
-  runs.reverse();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("Smoke-test history contains invalid JSON.");
+  }
 
-  return (
-    <main
-      style={{
-        padding: "2rem",
-      }}
-    >
-      <h1>Smoke Test Logs</h1>
+  if (!Array.isArray(parsed) || !parsed.every(isSmokeTestRun)) {
+    throw new Error("Smoke-test history contains an invalid run record.");
+  }
 
-      {runs.length === 0 ? (
-        <p>No smoke tests have been run yet.</p>
-      ) : (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-          }}
-        >
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Model</th>
-              <th>Dataset</th>
-              <th>Sample</th>
-              <th>Category Accuracy</th>
-              <th>Priority Accuracy</th>
-              <th>Category Mismatches</th>
-              <th>Priority Mismatches</th>
-              <th>Latency (ms)</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
+  return parsed;
+}
 
-          <tbody>
-            {runs.map((run, index) => (
-              <tr key={index}>
-                <td>{run.timestamp}</td>
-                <td>{run.model}</td>
-                <td>{run.dataset}</td>
-                <td>{run.sampleSize}</td>
-                <td>
-                  {run.categoryAccuracy ?? "-"}%
-                </td>
-                <td>
-                  {run.priorityAccuracy ?? "-"}%
-                </td>
-                <td>
-                  {run.categoryMismatches}
-                </td>
-                <td>
-                  {run.priorityMismatches}
-                </td>
-                <td>{run.latency}</td>
-                <td>${run.cost}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </main>
-  );
+export default async function AdminPage() {
+  try {
+    const runs = await loadSmokeTestRuns();
+    return <AdminDashboard runs={runs} />;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to load smoke-test history.";
+
+    return (
+      <main className="admin-page">
+        <section className="admin-load-error" role="alert">
+          <span className="admin-error-mark" aria-hidden="true">!</span>
+          <div>
+            <h1>Dashboard data could not be loaded</h1>
+            <p>{message}</p>
+            <p>
+              Check <code>data/smoke-test-runs.json</code> and refresh this page.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 }

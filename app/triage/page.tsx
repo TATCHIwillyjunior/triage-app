@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Strategy } from "../../lib/strategy";
 
 type TriageResult = {
   category: string;
@@ -17,7 +18,10 @@ type Usage = {
 
 export default function TriagePage() {
   const [ticket, setTicket] = useState("");
+  const [strategy, setStrategy] = useState<"llm" | "dm" | "dm-llm">("llm");
   const [result, setResult] = useState<TriageResult | null>(null);
+  const [decisionModelResult, setDecisionModelResult] =
+    useState<TriageResult | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [version, setVersion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,6 +33,7 @@ export default function TriagePage() {
     setIsSubmitting(true);
     setError(null);
     setResult(null);
+    setDecisionModelResult(null);
     setUsage(null);
     setVersion("");
 
@@ -38,7 +43,7 @@ export default function TriagePage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ticket }),
+        body: JSON.stringify({ ticket, strategy }),
       });
 
       const data: unknown = await response.json();
@@ -46,9 +51,9 @@ export default function TriagePage() {
       if (!response.ok) {
         const detail =
           typeof data === "object" &&
-          data !== null &&
-          "error" in data &&
-          typeof data.error === "string"
+            data !== null &&
+            "error" in data &&
+            typeof data.error === "string"
             ? data.error
             : "Unable to classify this ticket.";
 
@@ -67,7 +72,14 @@ export default function TriagePage() {
 
       setResult(data.triage as TriageResult);
       setVersion(data.version as string);
-      setUsage(data.usage as Usage);
+      setUsage(data.usage as Usage | null);
+      if (
+        "decisionModel" in data &&
+        typeof data.decisionModel === "object" &&
+        data.decisionModel !== null
+      ) {
+        setDecisionModelResult(data.decisionModel as TriageResult);
+      }
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -109,8 +121,30 @@ export default function TriagePage() {
                 <p>Include the details that will help us route it correctly.</p>
               </div>
             </div>
-            <span className="triage-version-badge">TRIAGE V2</span>
+            <span className="triage-version-badge">
+              {strategy === "dm"
+                ? "DECISION MODEL"
+                : strategy === "dm-llm"
+                  ? "DM + LLM"
+                  : "TRIAGE V2"}
+            </span>
           </div>
+          <label className="triage-label" htmlFor="strategy">
+            Classification strategy
+          </label>
+          <select
+            className="triage-strategy-select"
+            id="strategy"
+            value={strategy}
+            onChange={(event) =>
+              setStrategy(event.target.value as Strategy)
+            }
+            disabled={isSubmitting}
+          >
+            <option value="llm">LLM (Gemini)</option>
+            <option value="dm">Decision Model (rules)</option>
+            <option value="dm-llm">Decision Model + LLM</option>
+          </select>
 
           <label className="triage-label" htmlFor="ticket">
             Support ticket
@@ -232,6 +266,26 @@ export default function TriagePage() {
                 <p>{result.suggestedAction}</p>
               </div>
             </div>
+
+            {decisionModelResult && (
+              <div className="triage-comparison">
+                <h3>Decision Model comparison</h3>
+                <p>
+                  The displayed triage above is the LLM prediction. This
+                  separate result shows the rule-based model prediction.
+                </p>
+                <div className="triage-comparison-values">
+                  <span>
+                    <strong>Category:</strong>{" "}
+                    {decisionModelResult.category.replaceAll("_", " ")}
+                  </span>
+                  <span>
+                    <strong>Priority:</strong>{" "}
+                    {decisionModelResult.priority}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {usage && (
               <div className="triage-usage" aria-label="Model token usage">

@@ -1,6 +1,8 @@
 import tickets100 from "../../../data/support_tickets_100_labelled.json";
 import tickets500 from "../../../data/support_tickets_500.json";
-import { TriageError, triageTicket } from "../../../lib/triage";
+import { classify, isStrategy } from "../../../lib/classifier";
+import type { Strategy } from "../../../lib/strategy";
+import { TriageError } from "../../../lib/triage";
 import fs from "fs/promises";
 import path from "path";
 
@@ -21,6 +23,22 @@ type Ticket500 = {
 type SmokeTestRequest = {
   dataset: "100" | "500";
   sampleSize: number;
+  strategy: Strategy;
+};
+
+type SmokeTestRow = {
+  ticketId: string;
+  expectedCategory?: string;
+  expectedPriority?: string;
+  predictedCategory: string;
+  predictedPriority: string;
+  decisionModelCategory?: string;
+  decisionModelPriority?: string;
+};
+
+type Accuracy = {
+  mismatches: number;
+  accuracy: number | null;
 };
 
 function randomSample<T>(items: T[], count: number): T[] {
@@ -30,11 +48,13 @@ function randomSample<T>(items: T[], count: number): T[] {
 }
 
 function isSmokeTestRequest(value: unknown): value is SmokeTestRequest {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  if (!("dataset" in value) || !("sampleSize" in value)) {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("dataset" in value) ||
+    !("sampleSize" in value) ||
+    !("strategy" in value)
+  ) {
     return false;
   }
 
@@ -43,8 +63,66 @@ function isSmokeTestRequest(value: unknown): value is SmokeTestRequest {
     typeof value.sampleSize === "number" &&
     Number.isInteger(value.sampleSize) &&
     value.sampleSize >= 1 &&
-    value.sampleSize <= 100
+    value.sampleSize <= 100 &&
+    isStrategy(value.strategy)
   );
+}
+
+function calculateAccuracy(
+  rows: SmokeTestRow[],
+  expectedKey: "expectedCategory" | "expectedPriority",
+  predictedKey: "predictedCategory" | "predictedPriority"
+): Accuracy {
+  const labelledRows = rows.filter((row) => expectedKey in row);
+  const mismatches = labelledRows.filter(
+    (row) => row[expectedKey] !== row[predictedKey]
+  ).length;
+
+  return {
+    mismatches,
+    accuracy:
+      labelledRows.length === 0
+        ? null
+        : Number(
+            (
+              ((labelledRows.length - mismatches) / labelledRows.length) *
+              100
+            ).toFixed(2)
+          ),
+  };
+}
+
+async function readExistingRuns(
+  logFile: string
+): Promise<Record<string, unknown>[]> {
+  let content: string;
+
+  try {
+    content = await fs.readFile(logFile, "utf8");
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return [];
+    }
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("The smoke-test history file contains invalid JSON.");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("The smoke-test history file must contain a JSON array.");
+  }
+
+  return parsed as Record<string, unknown>[];
 }
 
 export async function POST(request: Request) {
@@ -63,70 +141,82 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "Choose a valid dataset and a sample size from 1 to 100.",
+            "Choose a valid dataset, sample size from 1 to 100, and classification strategy.",
         },
         { status: 400 }
       );
     }
 
     const startedAt = Date.now();
-    const { dataset, sampleSize } = body;
+    const { dataset, sampleSize, strategy } = body;
     const selectedTickets =
       dataset === "100"
         ? randomSample(tickets100 as Ticket100[], sampleSize)
         : randomSample(tickets500 as Ticket500[], sampleSize);
 
-    const results: Record<string, unknown>[] = [];
-    let categoryMismatches = 0;
-    let priorityMismatches = 0;
+    const results: SmokeTestRow[] = [];
 
     for (const ticket of selectedTickets) {
-      const triageResult = await triageTicket(
-        `${ticket.subject}\n\n${ticket.body}`
+      const classification = await classify(
+        `${ticket.subject}\n\n${ticket.body}`,
+        strategy
       );
 
-      const row: Record<string, unknown> = {
+      const row: SmokeTestRow = {
         ticketId: ticket.ticket_id,
-        predictedCategory: triageResult.triage.category,
-        predictedPriority: triageResult.triage.priority,
+        predictedCategory: classification.triage.category,
+        predictedPriority: classification.triage.priority,
       };
 
       if (
         dataset === "100" &&
         "category" in ticket &&
-        "priority" in ticket
+        typeof ticket.category === "string" &&
+        "priority" in ticket &&
+        typeof ticket.priority === "string"
       ) {
         row.expectedCategory = ticket.category;
         row.expectedPriority = ticket.priority;
+      }
 
-        if (ticket.category !== triageResult.triage.category) {
-          categoryMismatches++;
-        }
-        if (ticket.priority !== triageResult.triage.priority) {
-          priorityMismatches++;
-        }
+      if (classification.decisionModel) {
+        row.decisionModelCategory = classification.decisionModel.category;
+        row.decisionModelPriority = classification.decisionModel.priority;
       }
 
       results.push(row);
     }
 
-    const totalResults = results.length;
-    const categoryAccuracy =
-      dataset === "100"
-        ? Number(
-            (
-              ((totalResults - categoryMismatches) / totalResults) *
-              100
-            ).toFixed(2)
+    const category = calculateAccuracy(
+      results,
+      "expectedCategory",
+      "predictedCategory"
+    );
+    const priority = calculateAccuracy(
+      results,
+      "expectedPriority",
+      "predictedPriority"
+    );
+    const decisionModelCategory =
+      strategy === "dm-llm"
+        ? calculateAccuracy(
+            results.map((row) => ({
+              ...row,
+              predictedCategory: row.decisionModelCategory ?? "",
+            })),
+            "expectedCategory",
+            "predictedCategory"
           )
         : null;
-    const priorityAccuracy =
-      dataset === "100"
-        ? Number(
-            (
-              ((totalResults - priorityMismatches) / totalResults) *
-              100
-            ).toFixed(2)
+    const decisionModelPriority =
+      strategy === "dm-llm"
+        ? calculateAccuracy(
+            results.map((row) => ({
+              ...row,
+              predictedPriority: row.decisionModelPriority ?? "",
+            })),
+            "expectedPriority",
+            "predictedPriority"
           )
         : null;
     const latency = Date.now() - startedAt;
@@ -136,21 +226,25 @@ export async function POST(request: Request) {
       "data",
       "smoke-test-runs.json"
     );
-    let existingRuns: Record<string, unknown>[] = [];
-
-    try {
-      existingRuns = JSON.parse(await fs.readFile(logFile, "utf8"));
-    } catch {
-      existingRuns = [];
-    }
+    const existingRuns = await readExistingRuns(logFile);
 
     existingRuns.push({
       timestamp: new Date().toISOString(),
-      model: process.env.LLM_MODEL,
-      categoryAccuracy,
-      priorityAccuracy,
-      categoryMismatches,
-      priorityMismatches,
+      model:
+        strategy === "dm"
+          ? "not-used"
+          : process.env.LLM_MODEL ?? "unconfigured",
+      strategy,
+      categoryAccuracy: category.accuracy,
+      priorityAccuracy: priority.accuracy,
+      categoryMismatches: category.mismatches,
+      priorityMismatches: priority.mismatches,
+      decisionModelCategoryAccuracy: decisionModelCategory?.accuracy ?? null,
+      decisionModelPriorityAccuracy: decisionModelPriority?.accuracy ?? null,
+      decisionModelCategoryMismatches:
+        decisionModelCategory?.mismatches ?? null,
+      decisionModelPriorityMismatches:
+        decisionModelPriority?.mismatches ?? null,
       latency,
       cost: 0,
       sampleSize,
@@ -162,11 +256,18 @@ export async function POST(request: Request) {
     return Response.json({
       dataset,
       sampleSize,
+      strategy,
       results,
-      categoryMismatches,
-      priorityMismatches,
-      categoryAccuracy,
-      priorityAccuracy,
+      categoryMismatches: category.mismatches,
+      priorityMismatches: priority.mismatches,
+      categoryAccuracy: category.accuracy,
+      priorityAccuracy: priority.accuracy,
+      decisionModelCategoryMismatches:
+        decisionModelCategory?.mismatches ?? null,
+      decisionModelPriorityMismatches:
+        decisionModelPriority?.mismatches ?? null,
+      decisionModelCategoryAccuracy: decisionModelCategory?.accuracy ?? null,
+      decisionModelPriorityAccuracy: decisionModelPriority?.accuracy ?? null,
       latency,
     });
   } catch (error) {
