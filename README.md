@@ -6,22 +6,38 @@ planned application will use a large language model (LLM) from the backend to
 help analyze incoming support requests and support the triage process.
 
 The codebase is intentionally a basic skeleton. It provides a small chat
-interface and server endpoint as a first step: before building the full triage
-workflow, students can use this mock chat to validate the connection between
-the application and an LLM provider.
+interface and server endpoint as a first step: students can validate the
+connection between the application and an LLM provider before building the
+full triage workflow.
 
 ## Current status
 
-The chat feature is currently a mockup implemented as an echo service. The
-client sends a message to `/api/chat`, and the server returns it in a
-confirmation response. No LLM provider is called, and no LLM configuration is
-needed to run this version.
+The chat client sends messages to `/api/chat`. The server validates the
+request, sends the message to Google GenAI, and returns the generated response.
+Configure `LLM_API_KEY` and `LLM_MODEL` in your local environment before using
+the chat. The example variable names are listed in `.env.example`.
 
-This simple end-to-end flow is intended to make it possible to verify the
-application's client-to-backend connection first, then integrate and validate
-an LLM provider as an intermediate step, before implementing the complete
-support ticket triage feature. The triage route and LLM client are placeholders
-for that future work.
+The chat integration is an intermediate step toward the complete support
+ticket triage feature. The triage route is still a placeholder.
+
+## Project checklist
+
+### Completed
+
+- [x] Created the chat interface and connected it to the `/api/chat` endpoint.
+- [x] Added request validation for malformed JSON and empty or non-string
+  messages.
+- [x] Added a Google GenAI client configured with `LLM_API_KEY`.
+- [x] Updated the chat endpoint to generate a response using `LLM_MODEL`
+  instead of echoing the submitted message.
+- [x] Added labelled and unlabelled sample ticket datasets for development
+  and evaluation.
+
+### To do
+
+- [ ] Implement the support-ticket triage workflow in the triage route.
+- [ ] Use the ticket datasets to test and evaluate triage results.
+- [ ] Decide how to handle and present LLM provider errors in the chat UI.
 
 ## Sample data
 
@@ -55,9 +71,9 @@ The Send button is disabled when the message is empty or contains only spaces,
 and while a request is in progress.
 
 The client posts `{ "message": "your text" }` to `/api/chat`. The App Router
-handler in `app/api/chat/route.ts` returns
-`{ "answer": "Hello, you just said: your text" }`. Invalid JSON or an
-empty/non-string message returns HTTP 400 with an `error`.
+handler in `app/api/chat/route.ts` returns `{ "answer": "..." }` with the
+generated response. Invalid JSON or an empty/non-string message returns HTTP
+400 with an `error`.
 
 ## Checks
 
