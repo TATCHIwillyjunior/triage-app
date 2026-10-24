@@ -1,8 +1,9 @@
 import { triageTicket } from "../../../lib/triage";
 import { PROMPT_VERSION } from "../../../lib/prompt";
-import { TriageResponseSchema } from "../../../lib/schema";
 
-export async function POST(request: Request) {
+export async function POST(
+    request: Request
+) {
     let body: unknown;
 
     try {
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     } catch {
         return Response.json(
             { error: "Invalid JSON body." },
-            { status: 400 },
+            { status: 400 }
         );
     }
 
@@ -22,23 +23,32 @@ export async function POST(request: Request) {
         !body.ticket.trim()
     ) {
         return Response.json(
-            { error: "Please provide a ticket." },
-            { status: 400 },
+            {
+                error:
+                    "Please provide a ticket.",
+            },
+            {
+                status: 400,
+            }
         );
     }
 
     try {
-        const result = await triageTicket(body.ticket);
+        const result =
+            await triageTicket(body.ticket);
 
         return Response.json({
             version: PROMPT_VERSION,
-            triageResult: result,
+            triage: result.triage,
+            usage: result.usage,
         });
-    } catch {
+    } catch (error) {
         return Response.json(
             {
                 error:
-                    "The model returned an invalid triage response.",
+                    error instanceof Error
+                        ? error.message
+                        : "Invalid triage response.",
             },
             {
                 status: 500,

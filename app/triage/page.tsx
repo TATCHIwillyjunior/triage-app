@@ -9,10 +9,16 @@ type TriageResult = {
   suggestedAction: string;
 };
 
+type Usage = {
+  promptTokenCount: number;
+  candidatesTokenCount: number;
+  totalTokenCount: number;
+};
+
 export default function TriagePage() {
   const [ticket, setTicket] = useState("");
-  const [result, setResult] =
-    useState<TriageResult | null>(null);
+  const [result, setResult] = useState<TriageResult | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [version, setVersion] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +29,7 @@ export default function TriagePage() {
     setIsSubmitting(true);
     setError(null);
     setResult(null);
+    setUsage(null);
     setVersion("");
 
     try {
@@ -55,7 +62,8 @@ export default function TriagePage() {
         typeof data !== "object" ||
         data === null ||
         !("triage" in data) ||
-        !("version" in data)
+        !("version" in data) ||
+        !("usage" in data)
       ) {
         throw new Error(
           "The server returned an invalid triage result."
@@ -64,6 +72,7 @@ export default function TriagePage() {
 
       setResult(data.triage as TriageResult);
       setVersion(data.version as string);
+      setUsage(data.usage as Usage);
 
     } catch (error) {
       setError(
@@ -137,6 +146,27 @@ export default function TriagePage() {
           <p>
             <strong>Suggested Action:</strong>{" "}
             {result.suggestedAction}
+          </p>
+        </section>
+      )}
+
+      {usage && (
+        <section aria-label="Token usage">
+          <h3>Token Usage</h3>
+
+          <p>
+            <strong>Input Tokens:</strong>{" "}
+            {usage.promptTokenCount}
+          </p>
+
+          <p>
+            <strong>Output Tokens:</strong>{" "}
+            {usage.candidatesTokenCount}
+          </p>
+
+          <p>
+            <strong>Total Tokens:</strong>{" "}
+            {usage.totalTokenCount}
           </p>
         </section>
       )}

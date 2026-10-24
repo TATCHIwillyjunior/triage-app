@@ -1,111 +1,118 @@
 # Support ticket triage app
 
-This repository is the starting point for an educational project in which
-computer science students will build a support ticket triage application. The
-planned application will use a large language model (LLM) from the backend to
-help analyze incoming support requests and support the triage process.
+This project is a Next.js prototype for triaging support tickets with a large
+language model (LLM). The app combines a basic chat demo with a ticket
+classification workflow that assigns a category, priority, summary, and
+suggested action to a free-text support request.
 
-The codebase is intentionally a basic skeleton. It provides a small chat
-interface and server endpoint as a first step: students can validate the
-connection between the application and an LLM provider before building the
-full triage workflow.
+The main goal is to test how a model can turn noisy support tickets into a
+structured triage result that an internal support team can act on.
 
-## Current status
+## Current capabilities
 
-The chat client keeps the current conversation in the page and sends its
-message history to `/api/chat`. The server maps assistant messages to the
-Google GenAI `model` role, sends the conversation to Google GenAI, and returns
-the generated response. Configure `LLM_API_KEY` and `LLM_MODEL` in your local
-environment before using the chat. The example variable names are listed in
-`.env.example`.
+- Chat page at `/` for a simple conversational demo.
+- Triage page at `/triage` for submitting a single support ticket.
+- `/api/triage` endpoint that validates the request and invokes the LLM.
+- Versioned prompt handling for reproducible prompt testing.
+- Structured JSON output validation with Zod before returning results.
+- Display of token usage metadata returned by the model.
+- Error handling for invalid payloads and failed model responses.
 
-The chat integration is an intermediate step toward the complete support
-ticket triage feature. Triage V1 is available at `/triage` and
-`/api/triage`. It classifies one ticket into a category and priority, with a
-short summary and suggested action. The versioned prompt returns plain text;
-structured JSON output and schema validation are not part of this version.
-The triage page shows loading and request-error states, and displays the
-prompt version returned by the API.
+## Triage V2
 
-### Triage experiments
+The current triage implementation uses `triage-v2` and expects the model to
+return JSON matching this schema:
 
-Initial manual experiments using Gemini 2.5 Flash are recorded in
-[`EXPERIMENTS.md`](./EXPERIMENTS.md). The log includes three sample tickets
-with expected category and priority outputs, plus two issues found during
-testing: a prompt-injection case and an overly verbose response for a long
-ticket. The prompt was strengthened to treat ticket content as data and
-shortened to request concise output. The revised prompt should be retested
-against both cases before considering them resolved.
+```json
+{
+  "category": "technical_bug",
+  "priority": "high",
+  "summary": "VPN unavailable for remote employees",
+  "suggestedAction": "Escalate to infrastructure team"
+}
+```
 
-## Project checklist
+Allowed categories:
 
-### Completed
+- `billing`
+- `technical_bug`
+- `account`
+- `feature_request`
 
-- [x] Created the chat interface and connected it to the `/api/chat` endpoint.
-- [x] Added JSON parsing error handling and validation that chat requests
-  contain a `messages` array.
-- [x] Added a Google GenAI client configured with `LLM_API_KEY`.
-- [x] Updated the chat endpoint to send conversation history to Google GenAI
-  using `LLM_MODEL` and return the generated response.
-- [x] Updated the chat interface to retain user/assistant messages across
-  turns and show request errors.
-- [x] Added Triage V1 with a versioned prompt, a ticket classification API,
-  and a page for submitting and viewing plain-text results.
-- [x] Logged initial manual triage experiments and recorded prompt-injection
-  and response-length issues in `EXPERIMENTS.md`.
-- [x] Upgraded Next.js to the patched 16.4.3 release.
-- [x] Added labelled and unlabelled sample ticket datasets for development
-  and evaluation.
+Allowed priorities:
 
-### To do
+- `low`
+- `medium`
+- `high`
 
-- [ ] Validate each conversation entry on the server, including its role and
-  text, before sending it to the LLM.
-- [ ] Handle LLM provider failures in the chat and triage APIs with clear
-  error responses.
-- [ ] Test triage end to end with sample tickets and evaluate results against
-  the labelled dataset.
-- [ ] Retest the prompt-injection and long-ticket cases after prompt changes,
-  and record the results.
-- [ ] Increment the prompt version when prompt behavior changes so experiment
-  results can be tied to the exact prompt used.
-- [ ] Add structured JSON output and schema validation in the next version.
+The server validates the returned object with a Zod schema before sending it
+back to the client. The API response includes:
+
+```json
+{
+  "version": "triage-v2",
+  "triage": {
+    "category": "technical_bug",
+    "priority": "high",
+    "summary": "VPN unavailable for remote employees",
+    "suggestedAction": "Escalate to infrastructure team"
+  },
+  "usage": {
+    "promptTokenCount": 123,
+    "candidatesTokenCount": 45,
+    "totalTokenCount": 168
+  }
+}
+```
+
+## Project structure
+
+- `app/page.tsx` — simple support chat interface
+- `app/triage/page.tsx` — ticket triage UI
+- `app/api/chat/route.ts` — chat endpoint
+- `app/api/triage/route.ts` — triage endpoint
+- `lib/triage.ts` — model call and schema validation
+- `lib/prompt.ts` — prompt version and prompt text
+- `lib/schema.ts` — Zod schema for triage output
+- `data/` — labelled and unlabelled sample ticket datasets
+- `EXPERIMENTS.md` — manual prompt experiments and observations
 
 ## Sample data
 
-The `data/` folder contains two support-ticket datasets:
+The `data/` folder contains both development and evaluation datasets:
 
-- **500 unlabelled tickets** in
-  [`support_tickets_500.csv`](./data/support_tickets_500.csv) and
-  [`support_tickets_500.json`](./data/support_tickets_500.json), for exploring
-  and developing the triage workflow.
-- **100 labelled tickets** in
-  [`support_tickets_100_labelled.csv`](./data/support_tickets_100_labelled.csv)
-  and
-  [`support_tickets_100_labelled.json`](./data/support_tickets_100_labelled.json).
-  These include triage annotations such as category, priority, and whether a
-  ticket needs human review, making them useful for testing and evaluating
-  triage approaches.
+- 500 unlabelled tickets for exploring prompt ideas and iterating on the
+  classification workflow
+- 100 labelled tickets with expected category/priority labels for evaluating
+  output quality
 
 ## Run locally
 
 Requires Node.js 20.9 or newer.
 
-```sh
+```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3033 and send a message. Both `npm run dev` and
-`npm run start` use port 3033.
+Then open:
 
-Open http://localhost:3033/triage to submit a ticket for classification.
+- http://localhost:3033/ for the chat demo
+- http://localhost:3033/triage for the triage workflow
 
-The Send button is disabled when the message is empty or contains only spaces,
-and while a request is in progress.
+Set the required environment variables before running the app. An example is
+provided in `.env.example`:
 
-The client posts the conversation as an array of objects with a `role` (`user`
-or `assistant`) and `text` field:
+```bash
+LLM_API_KEY=your_key_here
+LLM_MODEL=gemini-2.5-flash
+```
+
+## API usage
+
+### Chat request
+
+The chat page posts a conversation payload shaped like this:
 
 ```json
 {
@@ -117,19 +124,37 @@ or `assistant`) and `text` field:
 }
 ```
 
-The App Router handler in `app/api/chat/route.ts` returns
-`{ "answer": "..." }` with the generated response. Invalid JSON and requests
-without a `messages` array return HTTP 400 with an `error`. Individual message
-entries are not yet validated by the server.
+The endpoint returns:
 
-The triage page posts `{ "ticket": "..." }` to `/api/triage`. The endpoint
-returns `{ "version": "triage-v1", "result": "..." }`; `result` is plain-text
-classification output. Invalid JSON and missing or blank tickets return HTTP
-400 with an `error`.
+```json
+{
+  "answer": "..."
+}
+```
 
-## Checks
+### Triage request
 
-```sh
+The triage page posts:
+
+```json
+{
+  "ticket": "I cannot access my VPN from home. Please help urgently."
+}
+```
+
+The endpoint validates the request, calls the LLM, validates the JSON schema,
+and returns structured triage output with usage metadata.
+
+## Validation checks
+
+```bash
 npm run typecheck
 npm run build
 ```
+
+## Notes
+
+This project is designed as a teaching and experimentation project. The triage
+prompt and evaluation set remain important areas for iterative improvements,
+particularly around edge cases, prompt injection attempts, and response
+consistency on long tickets.
