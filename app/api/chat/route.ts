@@ -1,5 +1,8 @@
+import { llm } from "../../../lib/llm";
+
 export async function POST(request: Request) {
   let body: unknown;
+
   try {
     body = await request.json();
   } catch {
@@ -19,7 +22,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const response = await llm.models.generateContent({
+    model: process.env.LLM_MODEL!,
+    contents: body.message,
+  });
+
   return Response.json({
-    answer: `Hello, you just said: ${body.message}`,
+    answer: response.text,
   });
 }
