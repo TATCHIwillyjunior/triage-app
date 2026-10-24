@@ -275,28 +275,41 @@ them as resolved.
 
 ## Project structure
 
+The tree below shows where the main application features, APIs, classification
+logic, data, and documentation live. Each item includes a short description.
+
 ```text
-app/
-  api/
-    chat/route.ts          Chat API
-    smoke-test/route.ts    Dataset sampling, evaluation, and run logging
-    triage/route.ts        Ticket validation and triage API
-  admin/page.tsx           Load and validate smoke-test history
-  admin/dashboard.tsx      Admin dashboard, filters, summaries, and tables
-  smoke-test/page.tsx      Smoke-test configuration and results
-  triage/page.tsx          Ticket triage form and result display
-  page.tsx                 Support chat
-  globals.css              Shared and feature-specific styles
-lib/
-  llm.ts                   Google Gemini API client configuration
-  decision-model.ts        Local deterministic category/priority rules
-  classifier.ts            LLM, DM, and hybrid strategy dispatcher
-  prompt.ts                Triage prompt and prompt version
-  schema.ts                Zod triage result schema
-  triage.ts                Model invocation and response validation
-data/                      Sample datasets and smoke-test history
-LLM-DM-report.md           Decision Model research and comparison report
+triage-app/
+├── app/
+│   ├── api/
+│   │   ├── chat/route.ts          Chat endpoint; sends messages to Gemini
+│   │   ├── triage/route.ts        Ticket endpoint; dispatches strategy
+│   │   └── smoke-test/route.ts    Runs evaluations and records metrics
+│   ├── admin/
+│   │   ├── page.tsx               Loads and validates smoke-test history
+│   │   └── dashboard.tsx          Dashboard, filters, summaries, and tables
+│   ├── smoke-test/page.tsx        Smoke-test setup and results at /smoke-test
+│   ├── triage/page.tsx             Ticket classification UI at /triage
+│   ├── page.tsx                    Support chat at /
+│   └── globals.css                 Shared styles for all app pages
+├── data/
+│   ├── support_tickets_100_labelled.*  Labelled evaluation tickets
+│   ├── support_tickets_500.*           Unlabelled development tickets
+│   └── smoke-test-runs.json            Saved evaluation run metrics
+├── lib/
+│   ├── llm.ts                    Google Gemini API client
+│   ├── decision-model.ts         Local rule-based classifier
+│   ├── classifier.ts             LLM, DM, and combined strategy dispatcher
+│   ├── strategy.ts               Shared strategy type
+│   ├── triage.ts                  Gemini call and response validation
+│   ├── prompt.ts                  Triage prompt and version
+│   └── schema.ts                  Zod schema for triage output
+├── EXPERIMENTS.md                 Manual prompt experiment notes
+├── LLM-DM-report.md               Decision Model and strategy evaluation
+└── README.md                      Setup, feature, API, and project guide
 ```
+
+`*` represents both CSV and JSON versions of each ticket dataset.
 
 ## Validation
 
@@ -354,6 +367,9 @@ possible ticket or provider condition.
   handling, responsive overflow, empty states, and explicit data-load errors.
 - [x] Backfill the known strategy (`llm`) for existing LLM-only smoke-test
   history entries.
+- [x] Run and save labelled smoke-test evaluations for all three strategies.
+  The current history contains 4 LLM runs (50 tickets total), 7 DM runs
+  (70 tickets total), and 2 DM + LLM runs (20 tickets total).
 - [x] Create `LLM-DM-report.md` to document the model choice, methodology,
   logged LLM results, and remaining evaluation work.
 - [x] Document local setup, Gemini configuration, application routes, API
@@ -367,15 +383,20 @@ possible ticket or provider condition.
   before sending conversation history to Gemini.
 - [ ] Add explicit Gemini provider-failure handling to `/api/chat`, matching
   the clear JSON errors returned by the triage endpoints.
-- [ ] Run and record end-to-end smoke tests against the labelled dataset;
-  inspect individual category and priority mismatches for all three
-  strategies.
+- [ ] Add repeatable smoke-test sampling (or persist sampled ticket IDs) so
+  LLM, DM, and DM + LLM can be evaluated on the same labelled tickets. Current
+  runs use random samples and are not directly comparable.
+- [ ] Persist per-ticket predictions and expected labels in run history, then
+  review and record category and priority mismatches for each strategy. The
+  UI shows per-ticket results during a run, but the history currently stores
+  aggregate metrics only.
 - [ ] Retest prompt-injection and long-ticket cases against the current
   `triage-v2` prompt and record the actual outcomes in `EXPERIMENTS.md`.
-- [ ] Increment `PROMPT_VERSION` and update experiment records whenever prompt
-  behavior changes.
-- [ ] Consider progress reporting for each ticket in larger smoke-test runs;
-  processing is currently sequential and a run may take a while.
+- [ ] Record the prompt version and Decision Model rule version in every
+  smoke-test history entry so results remain attributable after either model
+  changes.
+- [ ] Add per-ticket progress reporting for larger smoke-test runs; processing
+  is currently sequential and a run may take a while.
 - [ ] Replace the smoke-test history's placeholder cost value with measured
   Gemini usage/cost data, if reliable pricing information is available.
 - [ ] Review and evaluate model output with a human; the labelled dataset and
